@@ -18,14 +18,15 @@ bot = telebot.TeleBot(TOKEN, parse_mode="HTML")
 conn = sqlite3.connect("database.db", check_same_thread=False)
 cursor = conn.cursor()
 
-cursor.execute("""
+# Исправлено: константа в DEFAULT вместо ?
+cursor.execute(f"""
 CREATE TABLE IF NOT EXISTS users (
     user_id INTEGER PRIMARY KEY,
     username TEXT,
-    balance INTEGER DEFAULT ?,
+    balance INTEGER DEFAULT {START_BALANCE},
     last_bonus INTEGER DEFAULT 0
 )
-""", (START_BALANCE,))
+""")
 
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS games (
@@ -118,7 +119,7 @@ def minadd(message):
     except:
         bot.reply_to(message, "Использование: /minadd @username сумма")
         return
-    cursor.execute("SELECT user_id, username, balance FROM users WHERE username=?", (target_username,))
+    cursor.execute("SELECT user_id, username FROM users WHERE username=?", (target_username,))
     user = cursor.fetchone()
     if not user:
         bot.reply_to(message, "Пользователь не найден")
