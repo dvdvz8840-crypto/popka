@@ -3,16 +3,14 @@ from telebot import types
 import sqlite3
 import random
 import time
-import os
 
 # ==================== НАСТРОЙКИ ====================
-TOKEN = "8226623341:AAGCmnR-gOx7EBsrdeLhY5RnO3Wl3O19MOg"  # лучше через env для продакшена
+TOKEN = "8226623341:AAGCmnR-gOx7EBsrdeLhY5RnO3Wl3O19MOg"
 ADMIN_ID = 6151671553
 START_BALANCE = 1000
 BONUS_AMOUNT = 100
 BONUS_COOLDOWN = 30 * 60  # 30 минут
 FIELD_SIZE = 25  # 5x5
-SAFE_ROWS = 5
 
 bot = telebot.TeleBot(TOKEN, parse_mode="HTML")
 
@@ -71,7 +69,7 @@ def calculate_multiplier(mines_count, opened_count):
 # ==================== КОМАНДЫ ====================
 @bot.message_handler(commands=["minfo"])
 def minfo(message):
-    text = "🎮 Доступные команды бота:\n\n"
+    text = "🎮 Доступные команды:\n"
     text += "/mina      — Начать игру в мины\n"
     text += "/minbonus  — Получить бонус (раз в 30 минут)\n"
     text += "/minb      — Показать баланс\n"
@@ -107,6 +105,58 @@ def minbonus(message):
         seconds = remaining % 60
         bot.send_message(message.chat.id, f"🕒 {format_user_mention(user_id, username, first_name)} бонус можно снова получить через {minutes}м {seconds}с.")
 
+# ==================== АДМИН И ПЕРЕВОД ====================
+@bot.message_handler(commands=["minadd"])
+def minadd(message):
+    user_id = message.from_user.id
+    if user_id != ADMIN_ID:
+        return
+    try:
+        args = message.text.split()
+        target_username = args[1].replace("@", "")
+        amount = int(args[2])
+    except:
+        bot.reply_to(message, "Использование: /minadd @username сумма")
+        return
+    cursor.execute("SELECT user_id, username, balance FROM users WHERE username=?", (target_username,))
+    user = cursor.fetchone()
+    if not user:
+        bot.reply_to(message, "Пользователь не найден")
+        return
+    target_id = user[0]
+    target_first = target_username
+    update_balance(target_id, amount)
+    bot.send_message(message.chat.id, f"👑 Пользователю {format_user_mention(target_id, target_username, target_first)} выдано {amount} монет.")
+
+@bot.message_handler(commands=["мперевод"])
+def mpererod(message):
+    try:
+        args = message.text.split()
+        target_username = args[1].replace("@", "")
+        amount = int(args[2])
+    except:
+        bot.reply_to(message, "Использование: /мперевод @username сумма")
+        return
+    sender_id = message.from_user.id
+    sender_username = message.from_user.username
+    sender_first = message.from_user.first_name
+    get_user(sender_id, sender_username)
+    sender_balance = get_user(sender_id)[2]
+    if amount <= 0 or amount > sender_balance:
+        bot.reply_to(message, f"Неверная сумма! Ваш баланс: {sender_balance}")
+        return
+    cursor.execute("SELECT user_id, username FROM users WHERE username=?", (target_username,))
+    user = cursor.fetchone()
+    if not user:
+        bot.reply_to(message, "Пользователь не найден")
+        return
+    target_id = user[0]
+    target_first = target_username
+    update_balance(sender_id, -amount)
+    update_balance(target_id, amount)
+    bot.send_message(message.chat.id, f"🪙 {format_user_mention(sender_id, sender_username, sender_first)} перевел пользователю {format_user_mention(target_id, target_username, target_first)} {amount} монет.")
+
+# ==================== ИГРА ====================
 @bot.message_handler(commands=["mina"])
 def mina(message):
     user_id = message.from_user.id
@@ -119,7 +169,6 @@ def mina(message):
     msg = bot.send_message(message.chat.id, "💣 Напишите вашу ставку в чат:")
     user_states[user_id] = {"state": "waiting_for_bet", "msg_id": msg.message_id, "data": {}}
 
-# ==================== ОБРАБОТКА СООБЩЕНИЙ ====================
 @bot.message_handler(func=lambda m: True)
 def handle_text(message):
     user_id = message.from_user.id
@@ -127,11 +176,10 @@ def handle_text(message):
     username = message.from_user.username
     first_name = message.from_user.first_name
     get_user(user_id, username)
-    
-    # ==== Ставка ====
+
     if user_id in user_states and user_states[user_id].get("state") == "waiting_for_bet":
         if not text.isdigit():
-            return  # игнорируем слова
+            return
         bet = int(text)
         user = get_user(user_id)
         balance = user[2]
@@ -139,9 +187,10 @@ def handle_text(message):
             bot.send_message(message.chat.id, f"⚠ {format_user_mention(user_id, username, first_name)}, ставка некорректна или больше баланса ({balance} монет).")
             return
         update_balance(user_id, -bet)
-        try: bot.delete_message(message.chat.id, user_states[user_id]["msg_id"])
-        except: pass
-        # Выбор мин
+        try:
+            bot.delete_message(message.chat.id, user_states[user_id]["msg_id"])
+        except:
+            pass
         markup = types.InlineKeyboardMarkup(row_width=4)
         for m in [3,5,10,24]:
             btn = types.InlineKeyboardButton(str(m), callback_data=f"mines_{m}_{bet}")
@@ -151,32 +200,31 @@ def handle_text(message):
         user_states[user_id]["msg_id"] = msg.message_id
         user_states[user_id]["data"]["bet"] = bet
 
-# ==================== CALLBACKS ====================
 @bot.callback_query_handler(func=lambda c: True)
 def handle_callback(call):
     user_id = call.from_user.id
     username = call.from_user.username
     first_name = call.from_user.first_name
     data = call.data
-    
+
     if user_id not in user_states:
         bot.answer_callback_query(call.id, "⛔ Эта игра не ваша.")
         return
-    
+
     state = user_states[user_id].get("state")
     user_data = user_states[user_id].get("data", {})
-    
-    # ==== Выбор мин ====
+
     if state == "waiting_for_mines" and data.startswith("mines_"):
         _, mines_count, bet = data.split("_")
         mines_count = int(mines_count)
         bet = int(bet)
-        try: bot.delete_message(call.message.chat.id, user_states[user_id]["msg_id"])
-        except: pass
+        try:
+            bot.delete_message(call.message.chat.id, user_states[user_id]["msg_id"])
+        except:
+            pass
         all_cells = list(range(FIELD_SIZE))
         mine_cells = random.sample(all_cells, mines_count)
         user_data.update({"mines": mine_cells, "opened": [], "multiplier":1.0})
-        # Создаем поле
         markup = types.InlineKeyboardMarkup(row_width=5)
         for i in range(FIELD_SIZE):
             btn = types.InlineKeyboardButton("⬜", callback_data=f"cell_{i}")
@@ -189,7 +237,6 @@ def handle_callback(call):
         user_data.update({"bet": bet, "mine_count": mines_count})
         return
 
-    # ==== Игровые действия ====
     if state == "playing":
         if data.startswith("cell_"):
             cell_index = int(data.split("_")[1])
@@ -198,14 +245,16 @@ def handle_callback(call):
                 return
             if cell_index in user_data["mines"]:
                 text = f"💥 Игра завершена.\n{format_user_mention(user_id, username, first_name)} проиграл {user_data['bet']} монет."
-                try: bot.edit_message_text(chat_id=call.message.chat.id, message_id=user_states[user_id]["msg_id"], text=text)
+                try:
+                    bot.edit_message_text(chat_id=call.message.chat.id, message_id=user_states[user_id]["msg_id"], text=text)
+                except:
+                    pass
                 user_states.pop(user_id)
             else:
                 user_data["opened"].append(cell_index)
                 opened_count = len(user_data["opened"])
                 multiplier = calculate_multiplier(user_data["mine_count"], opened_count)
                 user_data["multiplier"] = multiplier
-                # Обновляем поле
                 markup = types.InlineKeyboardMarkup(row_width=5)
                 for i in range(FIELD_SIZE):
                     if i in user_data["opened"]:
@@ -215,13 +264,18 @@ def handle_callback(call):
                     markup.add(btn)
                 btn_cashout = types.InlineKeyboardButton("💰 Забрать", callback_data="cashout")
                 markup.add(btn_cashout)
-                try: bot.edit_message_reply_markup(chat_id=call.message.chat.id, message_id=user_states[user_id]["msg_id"], reply_markup=markup)
-                # Проверка выигрыша всех безопасных клеток
+                try:
+                    bot.edit_message_reply_markup(chat_id=call.message.chat.id, message_id=user_states[user_id]["msg_id"], reply_markup=markup)
+                except:
+                    pass
                 if opened_count == FIELD_SIZE - user_data["mine_count"]:
                     win_amount = round(user_data["bet"] * multiplier)
                     update_balance(user_id, win_amount)
                     text = f"💎 Игра завершилась.\n{format_user_mention(user_id, username, first_name)} открыл все поле, не попав ни на одну мину и выиграл {win_amount} монет!"
-                    try: bot.edit_message_text(chat_id=call.message.chat.id, message_id=user_states[user_id]["msg_id"], text=text)
+                    try:
+                        bot.edit_message_text(chat_id=call.message.chat.id, message_id=user_states[user_id]["msg_id"], text=text)
+                    except:
+                        pass
                     user_states.pop(user_id)
         elif data == "cashout":
             opened_count = len(user_data["opened"])
@@ -229,10 +283,13 @@ def handle_callback(call):
             win_amount = round(user_data["bet"] * multiplier)
             update_balance(user_id, win_amount)
             text = f"💠 Игра завершилась.\n{format_user_mention(user_id, username, first_name)} сделал кэшаут и забрал {win_amount} монет."
-            try: bot.edit_message_text(chat_id=call.message.chat.id, message_id=user_states[user_id]["msg_id"], text=text)
+            try:
+                bot.edit_message_text(chat_id=call.message.chat.id, message_id=user_states[user_id]["msg_id"], text=text)
+            except:
+                pass
             user_states.pop(user_id)
         bot.answer_callback_query(call.id)
 
-# ==================== РУН ====================
+# ==================== ЗАПУСК ====================
 print("Бот запущен...")
 bot.infinity_polling()
