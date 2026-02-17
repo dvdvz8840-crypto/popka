@@ -18,7 +18,6 @@ bot = telebot.TeleBot(TOKEN, parse_mode="HTML")
 conn = sqlite3.connect("database.db", check_same_thread=False)
 cursor = conn.cursor()
 
-# Исправлено: константа в DEFAULT вместо ?
 cursor.execute(f"""
 CREATE TABLE IF NOT EXISTS users (
     user_id INTEGER PRIMARY KEY,
@@ -193,7 +192,7 @@ def handle_text(message):
         except:
             pass
         markup = types.InlineKeyboardMarkup(row_width=4)
-        for m in [3,5,10,24]:
+        for m in [3,5,10,24]:  # кнопки выбора мин в одну линию
             btn = types.InlineKeyboardButton(str(m), callback_data=f"mines_{m}_{bet}")
             markup.add(btn)
         msg = bot.send_message(message.chat.id, "📃 Выберите количество мин на поле:", reply_markup=markup)
@@ -226,9 +225,9 @@ def handle_callback(call):
         all_cells = list(range(FIELD_SIZE))
         mine_cells = random.sample(all_cells, mines_count)
         user_data.update({"mines": mine_cells, "opened": [], "multiplier":1.0})
-        markup = types.InlineKeyboardMarkup(row_width=5)
+        markup = types.InlineKeyboardMarkup(row_width=5)  # 5x5 поле
         for i in range(FIELD_SIZE):
-            btn = types.InlineKeyboardButton("⬜", callback_data=f"cell_{i}")
+            btn = types.InlineKeyboardButton(" ", callback_data=f"cell_{i}")  # пустые кнопки
             markup.add(btn)
         btn_cashout = types.InlineKeyboardButton("💰 Забрать", callback_data="cashout")
         markup.add(btn_cashout)
@@ -245,9 +244,17 @@ def handle_callback(call):
                 bot.answer_callback_query(call.id, "Эта клетка уже открыта!")
                 return
             if cell_index in user_data["mines"]:
+                # Показываем все поле с минами и безопасными клетками
+                markup = types.InlineKeyboardMarkup(row_width=5)
+                for i in range(FIELD_SIZE):
+                    if i in user_data["mines"]:
+                        btn = types.InlineKeyboardButton("💣", callback_data="disabled")
+                    else:
+                        btn = types.InlineKeyboardButton("✅", callback_data="disabled")
+                    markup.add(btn)
                 text = f"💥 Игра завершена.\n{format_user_mention(user_id, username, first_name)} проиграл {user_data['bet']} монет."
                 try:
-                    bot.edit_message_text(chat_id=call.message.chat.id, message_id=user_states[user_id]["msg_id"], text=text)
+                    bot.edit_message_text(chat_id=call.message.chat.id, message_id=user_states[user_id]["msg_id"], text=text, reply_markup=markup)
                 except:
                     pass
                 user_states.pop(user_id)
@@ -261,7 +268,7 @@ def handle_callback(call):
                     if i in user_data["opened"]:
                         btn = types.InlineKeyboardButton("✅", callback_data=f"cell_{i}")
                     else:
-                        btn = types.InlineKeyboardButton("⬜", callback_data=f"cell_{i}")
+                        btn = types.InlineKeyboardButton(" ", callback_data=f"cell_{i}")  # пустые кнопки
                     markup.add(btn)
                 btn_cashout = types.InlineKeyboardButton("💰 Забрать", callback_data="cashout")
                 markup.add(btn_cashout)
