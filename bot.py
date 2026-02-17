@@ -191,10 +191,14 @@ def handle_text(message):
             bot.delete_message(message.chat.id, user_states[user_id]["msg_id"])
         except:
             pass
-        markup = types.InlineKeyboardMarkup(row_width=4)
-        for m in [3,5,10,24]:  # кнопки выбора мин в одну линию
-            btn = types.InlineKeyboardButton(str(m), callback_data=f"mines_{m}_{bet}")
-            markup.add(btn)
+        # Кнопки выбора мин в один ряд
+        markup = types.InlineKeyboardMarkup()
+        markup.row(
+            types.InlineKeyboardButton("3", callback_data=f"mines_3_{bet}"),
+            types.InlineKeyboardButton("5", callback_data=f"mines_5_{bet}"),
+            types.InlineKeyboardButton("10", callback_data=f"mines_10_{bet}"),
+            types.InlineKeyboardButton("24", callback_data=f"mines_24_{bet}")
+        )
         msg = bot.send_message(message.chat.id, "📃 Выберите количество мин на поле:", reply_markup=markup)
         user_states[user_id]["state"] = "waiting_for_mines"
         user_states[user_id]["msg_id"] = msg.message_id
@@ -225,10 +229,14 @@ def handle_callback(call):
         all_cells = list(range(FIELD_SIZE))
         mine_cells = random.sample(all_cells, mines_count)
         user_data.update({"mines": mine_cells, "opened": [], "multiplier":1.0})
-        markup = types.InlineKeyboardMarkup(row_width=5)  # 5x5 поле
-        for i in range(FIELD_SIZE):
-            btn = types.InlineKeyboardButton(" ", callback_data=f"cell_{i}")  # пустые кнопки
-            markup.add(btn)
+        # Поле 5x5 пустых кнопок
+        markup = types.InlineKeyboardMarkup()
+        for row in range(5):
+            buttons = []
+            for col in range(5):
+                index = row*5 + col
+                buttons.append(types.InlineKeyboardButton(" ", callback_data=f"cell_{index}"))
+            markup.row(*buttons)
         btn_cashout = types.InlineKeyboardButton("💰 Забрать", callback_data="cashout")
         markup.add(btn_cashout)
         msg = bot.send_message(call.message.chat.id, "💣 Игра началась, выбирайте клетку:", reply_markup=markup)
@@ -245,13 +253,16 @@ def handle_callback(call):
                 return
             if cell_index in user_data["mines"]:
                 # Показываем все поле с минами и безопасными клетками
-                markup = types.InlineKeyboardMarkup(row_width=5)
-                for i in range(FIELD_SIZE):
-                    if i in user_data["mines"]:
-                        btn = types.InlineKeyboardButton("💣", callback_data="disabled")
-                    else:
-                        btn = types.InlineKeyboardButton("✅", callback_data="disabled")
-                    markup.add(btn)
+                markup = types.InlineKeyboardMarkup()
+                for row in range(5):
+                    buttons = []
+                    for col in range(5):
+                        index = row*5 + col
+                        if index in user_data["mines"]:
+                            buttons.append(types.InlineKeyboardButton("💣", callback_data="disabled"))
+                        else:
+                            buttons.append(types.InlineKeyboardButton("✅", callback_data="disabled"))
+                    markup.row(*buttons)
                 text = f"💥 Игра завершена.\n{format_user_mention(user_id, username, first_name)} проиграл {user_data['bet']} монет."
                 try:
                     bot.edit_message_text(chat_id=call.message.chat.id, message_id=user_states[user_id]["msg_id"], text=text, reply_markup=markup)
@@ -263,13 +274,16 @@ def handle_callback(call):
                 opened_count = len(user_data["opened"])
                 multiplier = calculate_multiplier(user_data["mine_count"], opened_count)
                 user_data["multiplier"] = multiplier
-                markup = types.InlineKeyboardMarkup(row_width=5)
-                for i in range(FIELD_SIZE):
-                    if i in user_data["opened"]:
-                        btn = types.InlineKeyboardButton("✅", callback_data=f"cell_{i}")
-                    else:
-                        btn = types.InlineKeyboardButton(" ", callback_data=f"cell_{i}")  # пустые кнопки
-                    markup.add(btn)
+                markup = types.InlineKeyboardMarkup()
+                for row in range(5):
+                    buttons = []
+                    for col in range(5):
+                        index = row*5 + col
+                        if index in user_data["opened"]:
+                            buttons.append(types.InlineKeyboardButton("✅", callback_data=f"cell_{index}"))
+                        else:
+                            buttons.append(types.InlineKeyboardButton(" ", callback_data=f"cell_{index}"))
+                    markup.row(*buttons)
                 btn_cashout = types.InlineKeyboardButton("💰 Забрать", callback_data="cashout")
                 markup.add(btn_cashout)
                 try:
