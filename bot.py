@@ -312,26 +312,27 @@ def handle_callback(call):
                     except:
                         pass
                     user_states.pop(user_id)
-        elif data == "cashout":
-    opened_count = len(user_data["opened"])
-    multiplier = user_data["multiplier"]
-    win_amount = round(user_data["bet"] * multiplier)
-    update_balance(user_id, win_amount)
+                elif data == "cashout":
+            opened_count = len(user_data["opened"])
+            multiplier = user_data["multiplier"]
+            win_amount = round(user_data["bet"] * multiplier)
 
-    cashout_photo = "https://ibb.co/zHDwdxXF"
+            update_balance(user_id, win_amount)
 
-    try:
-        bot.delete_message(call.message.chat.id, user_states[user_id]["msg_id"])
-    except:
-        pass
+            cashout_photo = "https://i.ibb.co/zHDwdxXF/cashout.jpg"
 
-    bot.send_photo(
-        call.message.chat.id,
-        cashout_photo,
-        caption=f"💠 Игра завершилась.\n{format_user_mention(user_id, username, first_name)} сделал кэшаут и забрал {win_amount} монет."
-    )
+            bot.edit_message_caption(
+                chat_id=call.message.chat.id,
+                message_id=user_states[user_id]["msg_id"],
+                caption=f"💠 Игра завершилась.\n{format_user_mention(user_id, username, first_name)} сделал кэшаут и забрал {win_amount} монет."
+            )
 
-    user_states.pop(user_id)
+            bot.send_photo(
+                call.message.chat.id,
+                cashout_photo
+            )
+
+            user_states.pop(user_id)
         bot.answer_callback_query(call.id)
 
 # ==================== ЗАПУСК ====================
