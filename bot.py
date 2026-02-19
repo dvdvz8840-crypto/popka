@@ -94,29 +94,16 @@ def minbonus(message):
     user = get_user(user_id, username)
     now = int(time.time())
     last_bonus = user[3]
-
-    bonus_photo = "https://i.ibb.co/5gqhXTtJ/bonus.jpg"  # фото бонуса
-
     if now - last_bonus >= BONUS_COOLDOWN:
         update_balance(user_id, BONUS_AMOUNT)
         cursor.execute("UPDATE users SET last_bonus=? WHERE user_id=?", (now, user_id))
         conn.commit()
-
-        bot.send_photo(
-            message.chat.id,
-            bonus_photo,
-            caption=f"🎁 {format_user_mention(user_id, username, first_name)} получил бонус в размере {BONUS_AMOUNT} монет!"
-        )
+        bot.send_message(message.chat.id, f"🎁 {format_user_mention(user_id, username, first_name)} получил бонус в размере {BONUS_AMOUNT} монет!")
     else:
         remaining = BONUS_COOLDOWN - (now - last_bonus)
         minutes = remaining // 60
         seconds = remaining % 60
-
-        bot.send_photo(
-            message.chat.id,
-            bonus_photo,
-            caption=f"🕒 {format_user_mention(user_id, username, first_name)} бонус можно снова получить через {minutes}м {seconds}с."
-        )
+        bot.send_message(message.chat.id, f"🕒 {format_user_mention(user_id, username, first_name)} бонус можно снова получить через {minutes}м {seconds}с.")
 
 # ==================== АДМИН И ПЕРЕВОД ====================
 @bot.message_handler(commands=["minadd"])
@@ -312,26 +299,16 @@ def handle_callback(call):
                     except:
                         pass
                     user_states.pop(user_id)
-                elif data == "cashout":
+        elif data == "cashout":
             opened_count = len(user_data["opened"])
             multiplier = user_data["multiplier"]
             win_amount = round(user_data["bet"] * multiplier)
-
             update_balance(user_id, win_amount)
-
-            cashout_photo = "https://i.ibb.co/zHDwdxXF/cashout.jpg"
-
-            bot.edit_message_caption(
-                chat_id=call.message.chat.id,
-                message_id=user_states[user_id]["msg_id"],
-                caption=f"💠 Игра завершилась.\n{format_user_mention(user_id, username, first_name)} сделал кэшаут и забрал {win_amount} монет."
-            )
-
-            bot.send_photo(
-                call.message.chat.id,
-                cashout_photo
-            )
-
+            text = f"💠 Игра завершилась.\n{format_user_mention(user_id, username, first_name)} сделал кэшаут и забрал {win_amount} монет."
+            try:
+                bot.edit_message_text(chat_id=call.message.chat.id, message_id=user_states[user_id]["msg_id"], text=text)
+            except:
+                pass
             user_states.pop(user_id)
         bot.answer_callback_query(call.id)
 
