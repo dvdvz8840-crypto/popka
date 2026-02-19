@@ -5,7 +5,7 @@ import random
 import time
 
 # ==================== НАСТРОЙКИ ====================
-TOKEN = "8226623341:AAGCmnR-gOx7EBsrdeLhY5RnO3Wl3O19MOg"
+TOKEN = "8226623341:AAGCmnR-gOx7EBsrdeLhY5RnO3Wl3O19MOg"  # Твой токен
 ADMIN_ID = 6151671553
 START_BALANCE = 1000
 BONUS_AMOUNT = 100
@@ -94,16 +94,29 @@ def minbonus(message):
     user = get_user(user_id, username)
     now = int(time.time())
     last_bonus = user[3]
+
+    bonus_photo = "https://i.ibb.co/5gqhXTtJ/bonus.jpg"  # Фото бонуса
+
     if now - last_bonus >= BONUS_COOLDOWN:
         update_balance(user_id, BONUS_AMOUNT)
         cursor.execute("UPDATE users SET last_bonus=? WHERE user_id=?", (now, user_id))
         conn.commit()
-        bot.send_message(message.chat.id, f"🎁 {format_user_mention(user_id, username, first_name)} получил бонус в размере {BONUS_AMOUNT} монет!")
+
+        bot.send_photo(
+            message.chat.id,
+            bonus_photo,
+            caption=f"🎁 {format_user_mention(user_id, username, first_name)} получил бонус в размере {BONUS_AMOUNT} монет!"
+        )
     else:
         remaining = BONUS_COOLDOWN - (now - last_bonus)
         minutes = remaining // 60
         seconds = remaining % 60
-        bot.send_message(message.chat.id, f"🕒 {format_user_mention(user_id, username, first_name)} бонус можно снова получить через {minutes}м {seconds}с.")
+
+        bot.send_photo(
+            message.chat.id,
+            bonus_photo,
+            caption=f"🕒 {format_user_mention(user_id, username, first_name)} бонус можно снова получить через {minutes}м {seconds}с."
+        )
 
 # ==================== АДМИН И ПЕРЕВОД ====================
 @bot.message_handler(commands=["minadd"])
@@ -191,7 +204,6 @@ def handle_text(message):
             bot.delete_message(message.chat.id, user_states[user_id]["msg_id"])
         except:
             pass
-        # Кнопки выбора мин в один ряд
         markup = types.InlineKeyboardMarkup()
         markup.row(
             types.InlineKeyboardButton("3", callback_data=f"mines_3_{bet}"),
@@ -229,7 +241,6 @@ def handle_callback(call):
         all_cells = list(range(FIELD_SIZE))
         mine_cells = random.sample(all_cells, mines_count)
         user_data.update({"mines": mine_cells, "opened": [], "multiplier":1.0})
-        # Поле 5x5 пустых кнопок
         markup = types.InlineKeyboardMarkup()
         for row in range(5):
             buttons = []
@@ -252,7 +263,6 @@ def handle_callback(call):
                 bot.answer_callback_query(call.id, "Эта клетка уже открыта!")
                 return
             if cell_index in user_data["mines"]:
-                # Показываем все поле с минами и безопасными клетками
                 markup = types.InlineKeyboardMarkup()
                 for row in range(5):
                     buttons = []
@@ -304,9 +314,13 @@ def handle_callback(call):
             multiplier = user_data["multiplier"]
             win_amount = round(user_data["bet"] * multiplier)
             update_balance(user_id, win_amount)
-            text = f"💠 Игра завершилась.\n{format_user_mention(user_id, username, first_name)} сделал кэшаут и забрал {win_amount} монет."
+            cashout_photo = "https://i.ibb.co/zHDwdxXF/cashout.jpg"
             try:
-                bot.edit_message_text(chat_id=call.message.chat.id, message_id=user_states[user_id]["msg_id"], text=text)
+                bot.send_photo(
+                    call.message.chat.id,
+                    cashout_photo,
+                    caption=f"💠 Игра завершилась.\n{format_user_mention(user_id, username, first_name)} сделал кэшаут и забрал {win_amount} монет."
+                )
             except:
                 pass
             user_states.pop(user_id)
